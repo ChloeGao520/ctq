@@ -1,0 +1,159 @@
+<!doctype html>
+<html lang="zh">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>童年创伤自评（CTQ）</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    body{font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; max-width:900px; margin:20px auto; padding:10px;}
+    h1{text-align:center;}
+    .meta { display:flex; gap:10px; margin-bottom:10px; }
+    label{display:block; margin-top:12px;}
+    .question{ margin:12px 0; padding:8px; border-bottom:1px solid #eee; }
+    .options { display:flex; gap:8px; margin-top:6px; flex-wrap:wrap;}
+    .options label { font-size:14px; }
+    .btn { margin-top:16px; padding:10px 16px; font-size:16px; cursor:pointer; }
+    .result { margin-top:20px; padding:12px; border-radius:8px; background:#fafafa; border:1px solid #eee; }
+    .level { font-weight:700; }
+  </style>
+</head>
+<body>
+  <h1>童年创伤自评（CTQ）</h1>
+  <p>请先填写基本信息，然后根据你童年时期的经历选择最符合的选项。所有题目均为：从不——很少——有时——经常——非常符合（1–5）。</p>
+
+  <div class="meta">
+    <div><label>年龄：<input id="age" type="number" min="10" max="120" /></label></div>
+    <div>
+      <label>性别：
+        <select id="gender">
+          <option value="">请选择</option>
+          <option>女性</option>
+          <option>男性</option>
+          <option>其他 / 不愿透露</option>
+        </select>
+      </label>
+    </div>
+  </div>
+
+  <form id="ctqForm"></form>
+
+  <button id="submitBtn" class="btn">提交并查看结果</button>
+
+  <div id="output" class="result" style="display:none;">
+    <h2>测评结果</h2>
+    <div id="summary"></div>
+    <div style="width:100%;max-width:600px;margin-top:16px;"><canvas id="radarChart"></canvas></div>
+    <div id="levels" style="margin-top:12px;"></div>
+  </div>
+
+<script>
+const questions = [
+  "1. 我没有足够的食物可吃。",
+  "2. 有人照顾并保护我。",
+  "3. 我家里的人用'愚蠢'、'懒惰'或'丑陋'之类的话形容我。",
+  "4. 我父母喝醉或服毒品以至无法照顾我。",
+  "5. 我家里有人让我觉得自己很重要。",
+  "6. 我不得不穿脏衣服。",
+  "7. 我感到被爱。",
+  "8. 我感觉/认为我的父母希望我从未出生。",
+  "9. 我被打得很严重以致需要看医生。",
+  "10. 我对自己的家庭没有想要改变的事。",
+  "11. 我被打得留下淤青或疤痕。",
+  "12. 我曾用皮带、木板、绳索或其他硬物体被惩罚。",
+  "13. 我家人彼此照应。",
+  "14. 我的家人对我说伤人或侮辱性的话。",
+  "15. 我曾遭受身体虐待。",
+  "16. 我有一个完美的童年。",
+  "17. 我被打得很厉害，以至于老师、邻居或医生注意到。",
+  "18. 我觉得家里有人讨厌我。",
+  "19. 我家人彼此关系亲密。",
+  "20. 有人在性方面试图触碰我或试图让我触碰他们。",
+  "21. 有人威胁要伤害我，除非我与他们发生性行为或做性相关的事。",
+  "22. 我拥有世界上最好的家庭。",
+  "23. 有人让我尝试做性行为/让我观看性内容。",
+  "24. 有人猥亵我。",
+  "25. 我曾遭受情感虐待。",
+  "26. 当我需要时，有人带我去看医生。",
+  "27. 我曾遭受性虐待。",
+  "28. 我的家庭给我力量和支持。"
+];
+
+const optionLabels = ["从不符合","很少符合","有时符合","经常符合","非常符合"];
+const reversed = [2,5,7,13,19,26,28];
+const scales = {
+  "身体虐待": [9,11,12,15,17],
+  "情感虐待": [3,8,14,18,22],
+  "性虐待": [20,21,23,24,27],
+  "身体忽视": [1,2,4,6,26],
+  "情感忽视": [5,7,13,19,28]
+};
+const thresholds = {
+  "身体虐待": [7,9,12,13],
+  "情感虐待": [8,12,15,16],
+  "性虐待": [5,8,12,13],
+  "身体忽视": [7,9,12,13],
+  "情感忽视": [9,14,17,18]
+};
+
+const form = document.getElementById('ctqForm');
+questions.forEach((q, idx) => {
+  const qDiv = document.createElement('div');
+  qDiv.className = 'question';
+  qDiv.innerHTML = `<div><strong>${q}</strong></div>`;
+  const opts = document.createElement('div');
+  opts.className = 'options';
+  for(let i=1;i<=5;i++){
+    const id = `q${idx+1}_opt${i}`;
+    const lab = document.createElement('label');
+    lab.innerHTML = `<input type='radio' name='q${idx+1}' value='${i}' id='${id}' /> ${optionLabels[i-1]}`;
+    opts.appendChild(lab);
+  }
+  qDiv.appendChild(opts);
+  form.appendChild(qDiv);
+});
+
+document.getElementById('submitBtn').addEventListener('click', ()=>{
+  const answers = [];
+  for(let i=1;i<=28;i++){
+    const v = document.querySelector(`input[name='q${i}']:checked`);
+    if(!v){ alert('请完成所有题目后再提交（第 '+i+' 题未答）。'); return; }
+    let val = parseInt(v.value);
+    if(reversed.includes(i)){ val = 6 - val; }
+    answers.push(val);
+  }
+
+  const results = {};
+  for(const [k,items] of Object.entries(scales)){
+    let sum = 0; items.forEach(n=>sum+=answers[n-1]);
+    const avg = sum/items.length;
+    results[k] = {sum, avg};
+  }
+
+  const labels = Object.keys(results);
+  const numericVals = labels.map(k=>results[k].avg);
+  const summary = document.getElementById('summary');
+  summary.innerHTML = `<p>年龄：${document.getElementById('age').value || '未填写'}；性别：${document.getElementById('gender').value || '未填写'}</p>`;
+
+  const levelsDiv = document.getElementById('levels');
+  let html = '<h3>各维度评分（总分与等级）</h3><ul>';
+  for(const [k,obj] of Object.entries(results)){
+    const s=obj.sum, th=thresholds[k]; let level='';
+    if(s<=th[0]) level='无'; else if(s<=th[1]) level='轻度'; else if(s<=th[2]) level='中度'; else if(s>=th[3]) level='重度';
+    html+=`<li><strong>${k}</strong>：总分 ${s}，等级 <span class='level'>${level}</span></li>`;
+  }
+  html+='</ul>'; levelsDiv.innerHTML=html;
+
+  document.getElementById('output').style.display='block';
+  const ctx=document.getElementById('radarChart').getContext('2d');
+  if(window._ctqChart) window._ctqChart.destroy();
+  window._ctqChart=new Chart(ctx,{
+    type:'radar',
+    data:{labels:labels,datasets:[{label:'各维度平均得分（1–5）',data:numericVals,fill:true,tension:0.2,pointRadius:4,borderWidth:2}]},
+    options:{scales:{r:{min:1,max:5,ticks:{stepSize:1}}}}
+  });
+  document.getElementById('output').scrollIntoView({behavior:'smooth'});
+});
+</script>
+</body>
+</html>
